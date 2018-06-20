@@ -109,6 +109,10 @@ func (e *ExprStmt) TokenLiteral() string {
 	return e.Token.Literal
 }
 
+// =========================================
+// Expressions
+// =========================================
+
 type Ident struct {
 	Token token.Token // == token.IDENT
 	Value string
@@ -121,5 +125,20 @@ func (i *Ident) String() string {
 func (i *Ident) exprNode() {}
 
 func (i *Ident) TokenLiteral() string {
+	return i.Token.Literal
+}
+
+type IntLiteral struct {
+	Token token.Token
+	Value int64
+}
+
+func (i *IntLiteral) exprNode() {}
+
+func (i *IntLiteral) TokenLiteral() string {
+	return i.Token.Literal
+}
+
+func (i *IntLiteral) String() string {
 	return i.Token.Literal
 }
