@@ -39,6 +39,17 @@ func (l *LetStmt) TokenLiteral() string {
 	return l.Token.Literal
 }
 
+type ReturnStmt struct {
+	Token       token.Token
+	ReturnValue Expr
+}
+
+func (r *ReturnStmt) stmtNode() {}
+
+func (r *ReturnStmt) TokenLiteral() string {
+	return r.Token.Literal
+}
+
 type Ident struct {
 	Token token.Token // == token.IDENT
 	Value string
