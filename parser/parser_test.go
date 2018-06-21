@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/ei1chi/sample-lang/ast"
@@ -163,4 +164,61 @@ func TestIntLiteralExpr(t *testing.T) {
 	if literal.TokenLiteral() != "5" {
 		t.Errorf("literal.TokenLiteral not %s. got=%s", "5", literal.TokenLiteral())
 	}
+}
+
+func TestParsingPrefixExpr(t *testing.T) {
+	prefixTests := []struct {
+		input    string
+		operator string
+		intValue int64
+	}{
+		{"!5;", "!", 5},
+		{"-15;", "-", 15},
+	}
+
+	for _, test := range prefixTests {
+		l := lexer.NewLexer(test.input)
+		p := NewParser(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Stmts) != 1 {
+			t.Fatalf("program has not enough statements. got=%d", len(program.Stmts))
+		}
+		stmt, ok := program.Stmts[0].(*ast.ExprStmt)
+		if !ok {
+			t.Fatalf("program.Stmts[0] is not ast.ExprStmt. got=%T", program.Stmts[0])
+		}
+
+		exp, ok := stmt.Expr.(*ast.PrefixExpr)
+		if !ok {
+			t.Fatalf("stmt is not ast.PrefixExpr. got=%T", stmt.Expr)
+		}
+		if exp.Operator != test.operator {
+			t.Fatalf("exp.Operator is not '%s' got=%s", test.operator, exp.Operator)
+		}
+		if !testIntLiteral(t, exp.Right, test.intValue) {
+			return
+		}
+	}
+}
+
+func testIntLiteral(t *testing.T, il ast.Expr, value int64) bool {
+	integ, ok := il.(*ast.IntLiteral)
+	if !ok {
+		t.Errorf("il not *ast.IntLiteral. got=%T", il)
+		return false
+	}
+
+	if integ.Value != value {
+		t.Errorf("integ.Value not %d. got=%d", value, integ.Value)
+		return false
+	}
+
+	if integ.TokenLiteral() != fmt.Sprintf("%d", value) {
+		t.Errorf("integ.TokenLiteral not %d. got=%s", value, integ.TokenLiteral())
+		return false
+	}
+
+	return true
 }

@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/ei1chi/sample-lang/token"
@@ -133,12 +134,35 @@ type IntLiteral struct {
 	Value int64
 }
 
+func (i *IntLiteral) String() string {
+	return i.Token.Literal
+}
+
 func (i *IntLiteral) exprNode() {}
 
 func (i *IntLiteral) TokenLiteral() string {
 	return i.Token.Literal
 }
 
-func (i *IntLiteral) String() string {
-	return i.Token.Literal
+type PrefixExpr struct {
+	Token    token.Token
+	Operator string
+	Right    Expr
+}
+
+func (p *PrefixExpr) exprNode() {}
+
+func (p *PrefixExpr) TokenLiteral() string {
+	return p.Token.Literal
+}
+
+func (p *PrefixExpr) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("(")
+	out.WriteString(p.Operator)
+	out.WriteString(p.Right.String())
+	out.WriteString(")")
+
+	return out.String()
 }
