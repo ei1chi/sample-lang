@@ -35,21 +35,37 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.nextToken()
 	p.nextToken()
 
+	// register prefixes
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
-	p.registerPrefix(token.IDENT, p.parseIdent)
-	p.registerPrefix(token.INT, p.parseIntLiteral)
-	p.registerPrefix(token.BANG, p.parsePrefixExpr)
-	p.registerPrefix(token.MINUS, p.parsePrefixExpr)
+
+	prefixes := map[token.TokenType]prefixParseFn{
+		token.IDENT: p.parseIdent,
+		token.INT:   p.parseIntLiteral,
+		token.BANG:  p.parsePrefixExpr,
+		token.MINUS: p.parsePrefixExpr,
+	}
+	for tok, fn := range prefixes {
+		p.prefixParseFns[tok] = fn
+	}
+
+	// register infixes
+	p.infixParseFns = make(map[token.TokenType]infixParseFn)
+
+	infixes := map[token.TokenType]infixParseFn{
+		token.PLUS:     p.parseInfixExpr,
+		token.MINUS:    p.parseInfixExpr,
+		token.SLASH:    p.parseInfixExpr,
+		token.ASTERISK: p.parseInfixExpr,
+		token.EQ:       p.parseInfixExpr,
+		token.NOT_EQ:   p.parseInfixExpr,
+		token.LT:       p.parseInfixExpr,
+		token.GT:       p.parseInfixExpr,
+	}
+	for tok, fn := range infixes {
+		p.infixParseFns[tok] = fn
+	}
 
 	return p
-}
-
-func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
-	p.prefixParseFns[tokenType] = fn
-}
-
-func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
-	p.infixParseFns[tokenType] = fn
 }
 
 func (p *Parser) Errors() []string {
@@ -173,6 +189,33 @@ const (
 	CALL
 )
 
+var precs = map[token.TokenType]int{
+	token.EQ:       EQUALS,
+	token.NOT_EQ:   EQUALS,
+	token.LT:       COMPARE,
+	token.GT:       COMPARE,
+	token.PLUS:     SUM,
+	token.MINUS:    SUM,
+	token.SLASH:    PRODUCT,
+	token.ASTERISK: PRODUCT,
+}
+
+func (p *Parser) peekPrec() int {
+	if p, ok := precs[p.peekToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
+func (p *Parser) curPrec() int {
+	if p, ok := precs[p.curToken.Type]; ok {
+		return p
+	}
+
+	return LOWEST
+}
+
 func (p *Parser) parseExpr(prec int) ast.Expr {
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
@@ -180,6 +223,17 @@ func (p *Parser) parseExpr(prec int) ast.Expr {
 		return nil
 	}
 	leftExp := prefix()
+
+	for !p.peekTokenIs(token.SEMICOLON) && prec < p.peekPrec() {
+		infix := p.infixParseFns[p.peekToken.Type]
+		if infix == nil {
+			return leftExp
+		}
+
+		p.nextToken()
+
+		leftExp = infix(leftExp)
+	}
 
 	return leftExp
 }
@@ -212,6 +266,20 @@ func (p *Parser) parsePrefixExpr() ast.Expr {
 	p.nextToken()
 
 	expr.Right = p.parseExpr(PREFIX)
+
+	return expr
+}
+
+func (p *Parser) parseInfixExpr(left ast.Expr) ast.Expr {
+	expr := &ast.InfixExpr{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+		Left:     left,
+	}
+
+	prec := p.curPrec()
+	p.nextToken()
+	expr.Right = p.parseExpr(prec)
 
 	return expr
 }

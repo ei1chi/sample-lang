@@ -166,3 +166,28 @@ func (p *PrefixExpr) String() string {
 
 	return out.String()
 }
+
+type InfixExpr struct {
+	Token    token.Token
+	Left     Expr
+	Operator string
+	Right    Expr
+}
+
+func (i *InfixExpr) exprNode() {}
+
+func (i *InfixExpr) TokenLiteral() string {
+	return i.Token.Literal
+}
+
+func (i *InfixExpr) String() string {
+	var out strings.Builder
+
+	out.WriteString("(")
+	out.WriteString(i.Left.String())
+	out.WriteString(" " + i.Operator + " ")
+	out.WriteString(i.Right.String())
+	out.WriteString(")")
+
+	return out.String()
+}
