@@ -216,26 +216,39 @@ func (p *Parser) curPrec() int {
 	return LOWEST
 }
 
-func (p *Parser) parseExpr(prec int) ast.Expr {
+// parseExpr lowerPrec より優先度の高い演算子があるかを調べて繋げる。
+func (p *Parser) parseExpr(lowerPrec int) ast.Expr {
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
 		p.noPrefixParseFnError(p.curToken.Type)
 		return nil
 	}
-	leftExp := prefix()
+	exp := prefix()
 
-	for !p.peekTokenIs(token.SEMICOLON) && prec < p.peekPrec() {
+	for {
+		// セミコロンが来たら解析終了
+		if p.peekTokenIs(token.SEMICOLON) {
+			break
+		}
+
+		// 受け取ったprec以下なら解析中断
+		// SUMの右側に続く式なら、PRODUCT以上を期待する
+		// 次にSUMが来たら中断して処理を上流に返す
+		if p.peekPrec() <= lowerPrec {
+			break
+		}
+
 		infix := p.infixParseFns[p.peekToken.Type]
 		if infix == nil {
-			return leftExp
+			break
 		}
 
 		p.nextToken()
 
-		leftExp = infix(leftExp)
+		exp = infix(exp)
 	}
 
-	return leftExp
+	return exp
 }
 
 func (p *Parser) parseIdent() ast.Expr {
