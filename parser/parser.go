@@ -39,12 +39,14 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 
 	prefixes := map[token.TokenType]prefixParseFn{
-		token.IDENT: p.parseIdent,
-		token.INT:   p.parseIntLiteral,
-		token.BANG:  p.parsePrefixExpr,
-		token.MINUS: p.parsePrefixExpr,
-		token.TRUE:  p.parseBoolean,
-		token.FALSE: p.parseBoolean,
+		token.IDENT:  p.parseIdent,
+		token.INT:    p.parseIntLiteral,
+		token.BANG:   p.parsePrefixExpr,
+		token.MINUS:  p.parsePrefixExpr,
+		token.TRUE:   p.parseBoolean,
+		token.FALSE:  p.parseBoolean,
+		token.LPAREN: p.parseGroupedExpr,
+		token.IF:     p.parseIfExpr,
 	}
 	for tok, fn := range prefixes {
 		p.prefixParseFns[tok] = fn
@@ -159,6 +161,23 @@ func (p *Parser) parseExprStmt() *ast.ExprStmt {
 	return stmt
 }
 
+func (p *Parser) parseBlockStmt() *ast.BlockStmt {
+	block := &ast.BlockStmt{Token: p.curToken}
+	block.Stmts = []ast.Stmt{}
+
+	p.nextToken()
+
+	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
+		stmt := p.parseStmt()
+		if stmt != nil {
+			block.Stmts = append(block.Stmts, stmt)
+		}
+		p.nextToken()
+	}
+
+	return block
+}
+
 func (p *Parser) curTokenIs(t token.TokenType) bool {
 	return p.curToken.Type == t
 }
@@ -235,7 +254,7 @@ func (p *Parser) parseExpr(lowerPrec int) ast.Expr {
 
 		// 受け取ったprec以下なら解析中断
 		// SUMの右側に続く式なら、PRODUCT以上を期待する
-		// 次にSUMが来たら中断して処理を上流に返す
+		// 次にSUMが来たら中断して処理を上流（優先度の低い方）に返す
 		if p.peekPrec() <= lowerPrec {
 			break
 		}
@@ -251,25 +270,6 @@ func (p *Parser) parseExpr(lowerPrec int) ast.Expr {
 	}
 
 	return exp
-}
-
-func (p *Parser) parseIdent() ast.Expr {
-	return &ast.Ident{Token: p.curToken, Value: p.curToken.Literal}
-}
-
-func (p *Parser) parseIntLiteral() ast.Expr {
-	lit := &ast.IntLiteral{Token: p.curToken}
-
-	value, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
-	if err != nil {
-		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Literal)
-		p.errors = append(p.errors, msg)
-		return nil
-	}
-
-	lit.Value = value
-
-	return lit
 }
 
 func (p *Parser) parsePrefixExpr() ast.Expr {
@@ -298,7 +298,72 @@ func (p *Parser) parseInfixExpr(left ast.Expr) ast.Expr {
 
 	return expr
 }
+func (p *Parser) parseIdent() ast.Expr {
+	return &ast.Ident{Token: p.curToken, Value: p.curToken.Literal}
+}
+
+func (p *Parser) parseIntLiteral() ast.Expr {
+	lit := &ast.IntLiteral{Token: p.curToken}
+
+	value, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
+	if err != nil {
+		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Literal)
+		p.errors = append(p.errors, msg)
+		return nil
+	}
+
+	lit.Value = value
+
+	return lit
+}
+
+func (p *Parser) parseGroupedExpr() ast.Expr {
+	p.nextToken()
+
+	expr := p.parseExpr(LOWEST)
+	if !p.expectPeek(token.RPAREN) {
+		return nil // error
+	}
+
+	return expr
+}
 
 func (p *Parser) parseBoolean() ast.Expr {
 	return &ast.Boolean{Token: p.curToken, Value: p.curTokenIs(token.TRUE)}
 }
+
+// IF LPAREN Cond RPAREN LBRACE Cons RBRACE ELSE LBRACE Alt RBRACE
+func (p *Parser) parseIfExpr() ast.Expr {
+	ie := &ast.IfExpr{Token: p.curToken}
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	p.nextToken()
+	ie.Cond = p.parseExpr(LOWEST)
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	ie.Cons = p.parseBlockStmt()
+
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken()
+
+		if !p.expectPeek(token.LBRACE) {
+			return nil
+		}
+
+		ie.Alt = p.parseBlockStmt()
+	}
+
+	return ie
+}
+
+// FN LPAREN Parameters RPAREN LBRACE BlockStmt RBRACE
+func (p *Parser) parseFunction() ast.Expr {}

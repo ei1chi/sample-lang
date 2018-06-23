@@ -166,6 +166,102 @@ func TestIntLiteralExpr(t *testing.T) {
 	}
 }
 
+func TestIfExpr(t *testing.T) {
+	input := `if (x < y) { x }`
+
+	l := lexer.NewLexer(input)
+	p := NewParser(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Stmts) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.Stmts))
+	}
+	stmt, ok := program.Stmts[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("program.Stmts[0] is not ast.ExprStmt. got=%T", program.Stmts[0])
+	}
+
+	ie, ok := stmt.Expr.(*ast.IfExpr)
+	if !ok {
+		t.Fatalf("stmt.Expr is not astIfExpr. got=%T", stmt.Expr)
+	}
+
+	if !testInfixExpr(t, ie.Cond, "x", "<", "y") {
+		return
+	}
+
+	if len(ie.Cons.Stmts) != 1 {
+		t.Errorf("cons is not 1 stmts. got=%d\n", len(ie.Cons.Stmts))
+	}
+
+	cons, ok := ie.Cons.Stmts[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("Stmts[0] is not ast.ExprStmt. got=%T", ie.Cons.Stmts[0])
+	}
+
+	if !testIdent(t, cons.Expr, "x") {
+		return
+	}
+
+	if ie.Alt != nil {
+		t.Errorf("expr.Alt.Stmts was not nil. got=%+v", ie.Alt)
+	}
+}
+
+func TestIfElseExpr(t *testing.T) {
+	input := `if (x < y) { x } else { y }`
+
+	l := lexer.NewLexer(input)
+	p := NewParser(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Stmts) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.Stmts))
+	}
+	stmt, ok := program.Stmts[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("program.Stmts[0] is not ast.ExprStmt. got=%T", program.Stmts[0])
+	}
+
+	ie, ok := stmt.Expr.(*ast.IfExpr)
+	if !ok {
+		t.Fatalf("stmt.Expr is not astIfExpr. got=%T", stmt.Expr)
+	}
+
+	if !testInfixExpr(t, ie.Cond, "x", "<", "y") {
+		return
+	}
+
+	if len(ie.Cons.Stmts) != 1 {
+		t.Errorf("cons is not 1 stmts. got=%d\n", len(ie.Cons.Stmts))
+	}
+
+	cons, ok := ie.Cons.Stmts[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("Stmts[0] is not ast.ExprStmt. got=%T", ie.Cons.Stmts[0])
+	}
+
+	if !testIdent(t, cons.Expr, "x") {
+		return
+	}
+
+	if len(ie.Cons.Stmts) != 1 {
+		t.Errorf("cons is not 1 stmts. got=%d\n", len(ie.Cons.Stmts))
+	}
+
+	alt, ok := ie.Alt.Stmts[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("Stmts[0] is not ast.ExprStmt. got=%T", ie.Alt.Stmts[0])
+	}
+
+	if !testIdent(t, alt.Expr, "y") {
+		return
+	}
+
+}
+
 func TestParsingPrefixExpr(t *testing.T) {
 	prefixTests := []struct {
 		input    string
