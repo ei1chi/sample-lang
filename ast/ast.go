@@ -144,6 +144,21 @@ func (i *IntLiteral) TokenLiteral() string {
 	return i.Token.Literal
 }
 
+type Boolean struct {
+	Token token.Token
+	Value bool
+}
+
+func (b *Boolean) exprNode() {}
+
+func (b *Boolean) TokenLiteral() string {
+	return b.Token.Literal
+}
+
+func (b *Boolean) String() string {
+	return b.Token.Literal
+}
+
 type PrefixExpr struct {
 	Token    token.Token
 	Operator string

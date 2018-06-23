@@ -43,6 +43,8 @@ func NewParser(l *lexer.Lexer) *Parser {
 		token.INT:   p.parseIntLiteral,
 		token.BANG:  p.parsePrefixExpr,
 		token.MINUS: p.parsePrefixExpr,
+		token.TRUE:  p.parseBoolean,
+		token.FALSE: p.parseBoolean,
 	}
 	for tok, fn := range prefixes {
 		p.prefixParseFns[tok] = fn
@@ -295,4 +297,8 @@ func (p *Parser) parseInfixExpr(left ast.Expr) ast.Expr {
 	expr.Right = p.parseExpr(prec)
 
 	return expr
+}
+
+func (p *Parser) parseBoolean() ast.Expr {
+	return &ast.Boolean{Token: p.curToken, Value: p.curTokenIs(token.TRUE)}
 }
