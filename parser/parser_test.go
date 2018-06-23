@@ -8,41 +8,6 @@ import (
 	"github.com/ei1chi/sample-lang/lexer"
 )
 
-func TestLetStmts(t *testing.T) {
-	input := `
-	let x = 5;
-	let y = 10;
-	let foobar = 838383;
-	`
-
-	l := lexer.NewLexer(input)
-	p := NewParser(l)
-
-	program := p.ParseProgram()
-	checkParserErrors(t, p)
-	if program == nil {
-		t.Fatalf("ParseProgram() returned nil")
-	}
-	if len(program.Stmts) != 3 {
-		t.Fatalf("program.Statements does not contain 3 statements. got=%d", len(program.Stmts))
-	}
-
-	tests := []struct {
-		expectedIdent string
-	}{
-		{"x"},
-		{"y"},
-		{"foobar"},
-	}
-
-	for i, test := range tests {
-		stmt := program.Stmts[i]
-		if !testLetStmt(t, stmt, test.expectedIdent) {
-			return
-		}
-	}
-}
-
 func testLetStmt(t *testing.T, s ast.Stmt, name string) bool {
 	if s.TokenLiteral() != "let" {
 		t.Errorf("s.TokenLiteral not 'let'. got=%q", s.TokenLiteral())
@@ -68,31 +33,63 @@ func testLetStmt(t *testing.T, s ast.Stmt, name string) bool {
 	return true
 }
 
-func TestReturnStmts(t *testing.T) {
-	input := `
-	return 5;
-	return 10;
-	return 993322;
-	`
-
-	l := lexer.NewLexer(input)
-	p := NewParser(l)
-
-	program := p.ParseProgram()
-	checkParserErrors(t, p)
-
-	if len(program.Stmts) != 3 {
-		t.Fatalf("progarm.Stmts does not contain 3 statements. got=%d", len(program.Stmts))
+func TestLetStmts(t *testing.T) {
+	tests := []struct {
+		input         string
+		expectedIdent string
+		expectedValue interface{}
+	}{
+		{"let x = 5;", "x", 5},
+		{"let y = true;", "y", true},
+		{"let foobar = y;", "foobar", "y"},
 	}
 
-	for _, stmt := range program.Stmts {
-		returnStmt, ok := stmt.(*ast.ReturnStmt)
-		if !ok {
-			t.Errorf("stmt not *ast.returnStmt. got=%T", stmt)
-			continue
+	for _, test := range tests {
+		l := lexer.NewLexer(test.input)
+		p := NewParser(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Stmts) != 1 {
+			t.Fatalf("program.Stmts does not contain 1 stmts. got=%d", len(program.Stmts))
 		}
-		if returnStmt.TokenLiteral() != "return" {
-			t.Errorf("returnStmt.TokenLiteral not 'return', got %q", returnStmt.TokenLiteral())
+
+		stmt := program.Stmts[0]
+		if !testLetStmt(t, stmt, test.expectedIdent) {
+			return
+		}
+
+		val := stmt.(*ast.LetStmt).Value
+		if !testLiteralExpr(t, val, test.expectedValue) {
+			return
+		}
+	}
+}
+
+func TestReturnStmts(t *testing.T) {
+	tests := []struct {
+		input         string
+		expectedValue interface{}
+	}{
+		{"return 5", 5},
+		{"return y", "y"},
+	}
+
+	for _, test := range tests {
+		l := lexer.NewLexer(test.input)
+		p := NewParser(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Stmts) != 1 {
+			t.Fatalf("program.Stmts does not contain 1 stmts. got=%d", len(program.Stmts))
+		}
+
+		stmt := program.Stmts[0]
+
+		val := stmt.(*ast.ReturnStmt).ReturnValue
+		if !testLiteralExpr(t, val, test.expectedValue) {
+			return
 		}
 	}
 }
@@ -260,6 +257,46 @@ func TestIfElseExpr(t *testing.T) {
 		return
 	}
 
+}
+
+func TestFuncLiteralParsing(t *testing.T) {
+	input := `fn(x, y) { x + y; }`
+
+	l := lexer.NewLexer(input)
+	p := NewParser(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Stmts) != 1 {
+		t.Fatalf("program.Stmts does not contain %d stmts, got=%d\n", 1, len(program.Stmts))
+	}
+	stmt, ok := program.Stmts[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("program.Stmts[0] is not ast.ExprStmt. got=%T", program.Stmts[0])
+	}
+
+	fn, ok := stmt.Expr.(*ast.FuncLiteral)
+	if !ok {
+		t.Fatalf("stmt.Expr is not ast.FuncLiteral got=%T", stmt.Expr)
+	}
+
+	if len(fn.Params) != 2 {
+		t.Fatalf("function literal parameters wrong, want 2, got=%d\n", len(fn.Params))
+	}
+
+	testLiteralExpr(t, fn.Params[0], "x")
+	testLiteralExpr(t, fn.Params[1], "y")
+
+	if len(fn.Body.Stmts) != 1 {
+		t.Fatalf("fn.Body.Stmts has not 1 stmts. got=%d\n", len(fn.Body.Stmts))
+	}
+
+	bs, ok := fn.Body.Stmts[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("function body stmt is not ast.ExprStmt. got=%T", fn.Body.Stmts[0])
+	}
+
+	testInfixExpr(t, bs.Expr, "x", "+", "y")
 }
 
 func TestParsingPrefixExpr(t *testing.T) {
@@ -437,4 +474,68 @@ func testInfixExpr(t *testing.T, expr ast.Expr, left interface{}, ope string, ri
 	}
 
 	return true
+}
+
+func TestFuncParamsParsing(t *testing.T) {
+	tests := []struct {
+		input          string
+		expectedParams []string
+	}{
+		{input: "fn() {};", expectedParams: []string{}},
+		{input: "fn(x) {};", expectedParams: []string{"x"}},
+		{input: "fn(x, y, z) {};", expectedParams: []string{"x", "y", "z"}},
+	}
+
+	for _, test := range tests {
+		l := lexer.NewLexer(test.input)
+		p := NewParser(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		stmt := program.Stmts[0].(*ast.ExprStmt)
+		fn := stmt.Expr.(*ast.FuncLiteral)
+
+		if len(fn.Params) != len(test.expectedParams) {
+			t.Errorf("length parameters wrong. want %d, got=%d\n", len(test.expectedParams), len(fn.Params))
+		}
+
+		for i, ident := range test.expectedParams {
+			testLiteralExpr(t, fn.Params[i], ident)
+		}
+	}
+}
+
+func TestCallExprParsing(t *testing.T) {
+	input := `add(1, 2 * 3, 4 + 5);`
+
+	l := lexer.NewLexer(input)
+	p := NewParser(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Stmts) != 1 {
+		t.Fatalf("program.Stmts does not cotain %d stmts. got=%d\n", 1, len(program.Stmts))
+	}
+
+	stmt, ok := program.Stmts[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("stmt.Expr is not ast.CallExpr got=%T", stmt.Expr)
+	}
+
+	ce, ok := stmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("stmt.Expr is not ast.CallExpr. got=%T", stmt.Expr)
+	}
+
+	if !testIdent(t, ce.Fn, "add") {
+		return
+	}
+
+	if len(ce.Args) != 3 {
+		t.Fatalf("wrong length of args. got=%d", len(ce.Args))
+	}
+
+	testLiteralExpr(t, ce.Args[0], 1)
+	testInfixExpr(t, ce.Args[1], 2, "*", 3)
+	testInfixExpr(t, ce.Args[2], 4, "+", 5)
 }

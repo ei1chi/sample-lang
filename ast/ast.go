@@ -1,7 +1,6 @@
 package ast
 
 import (
-	"bytes"
 	"strings"
 
 	"github.com/ei1chi/sample-lang/token"
@@ -148,7 +147,7 @@ func (p *PrefixExpr) TokenLiteral() string {
 }
 
 func (p *PrefixExpr) String() string {
-	var out bytes.Buffer
+	var out strings.Builder
 
 	out.WriteString("(")
 	out.WriteString(p.Operator)
@@ -253,6 +252,63 @@ func (i *IfExpr) String() string {
 		out.WriteString("else ")
 		out.WriteString(i.Alt.String())
 	}
+
+	return out.String()
+}
+
+type FuncLiteral struct {
+	Token  token.Token // "fn" token
+	Params []*Ident
+	Body   *BlockStmt
+}
+
+func (f *FuncLiteral) exprNode() {}
+
+func (f *FuncLiteral) TokenLiteral() string {
+	return f.Token.Literal
+}
+
+func (f *FuncLiteral) String() string {
+	var out strings.Builder
+
+	params := []string{}
+	for _, p := range f.Params {
+		params = append(params, p.String())
+	}
+
+	out.WriteString(f.TokenLiteral())
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(") ")
+	out.WriteString(f.Body.String())
+
+	return out.String()
+}
+
+type CallExpr struct {
+	Token token.Token // "(" token
+	Fn    Expr
+	Args  []Expr
+}
+
+func (c *CallExpr) exprNode() {}
+
+func (c *CallExpr) TokenLiteral() string {
+	return c.Token.Literal
+}
+
+func (c *CallExpr) String() string {
+	var out strings.Builder
+
+	args := []string{}
+	for _, a := range c.Args {
+		args = append(args, a.String())
+	}
+
+	out.WriteString(c.Fn.String())
+	out.WriteString("(")
+	out.WriteString(strings.Join(args, ", "))
+	out.WriteString(")")
 
 	return out.String()
 }

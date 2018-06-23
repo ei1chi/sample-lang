@@ -39,14 +39,15 @@ func NewParser(l *lexer.Lexer) *Parser {
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 
 	prefixes := map[token.TokenType]prefixParseFn{
-		token.IDENT:  p.parseIdent,
-		token.INT:    p.parseIntLiteral,
-		token.BANG:   p.parsePrefixExpr,
-		token.MINUS:  p.parsePrefixExpr,
-		token.TRUE:   p.parseBoolean,
-		token.FALSE:  p.parseBoolean,
-		token.LPAREN: p.parseGroupedExpr,
-		token.IF:     p.parseIfExpr,
+		token.IDENT:    p.parseIdent,
+		token.INT:      p.parseIntLiteral,
+		token.BANG:     p.parsePrefixExpr,
+		token.MINUS:    p.parsePrefixExpr,
+		token.TRUE:     p.parseBoolean,
+		token.FALSE:    p.parseBoolean,
+		token.LPAREN:   p.parseGroupedExpr,
+		token.IF:       p.parseIfExpr,
+		token.FUNCTION: p.parseFuncLiteral,
 	}
 	for tok, fn := range prefixes {
 		p.prefixParseFns[tok] = fn
@@ -64,6 +65,7 @@ func NewParser(l *lexer.Lexer) *Parser {
 		token.NOT_EQ:   p.parseInfixExpr,
 		token.LT:       p.parseInfixExpr,
 		token.GT:       p.parseInfixExpr,
+		token.LPAREN:   p.parseCallExpr,
 	}
 	for tok, fn := range infixes {
 		p.infixParseFns[tok] = fn
@@ -130,7 +132,11 @@ func (p *Parser) parseLetStmt() *ast.LetStmt {
 		return nil
 	}
 
-	for !p.curTokenIs(token.SEMICOLON) {
+	p.nextToken()
+
+	stmt.Value = p.parseExpr(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 
@@ -142,7 +148,9 @@ func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
 
 	p.nextToken()
 
-	for !p.curTokenIs(token.SEMICOLON) {
+	stmt.ReturnValue = p.parseExpr(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 
@@ -219,6 +227,7 @@ var precs = map[token.TokenType]int{
 	token.MINUS:    SUM,
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
+	token.LPAREN:   CALL,
 }
 
 func (p *Parser) peekPrec() int {
@@ -366,4 +375,78 @@ func (p *Parser) parseIfExpr() ast.Expr {
 }
 
 // FN LPAREN Parameters RPAREN LBRACE BlockStmt RBRACE
-func (p *Parser) parseFunction() ast.Expr {}
+func (p *Parser) parseFuncLiteral() ast.Expr {
+	fl := &ast.FuncLiteral{Token: p.curToken}
+
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	fl.Params = p.parseFuncParams()
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	fl.Body = p.parseBlockStmt()
+
+	return fl
+}
+
+func (p *Parser) parseFuncParams() []*ast.Ident {
+	idents := []*ast.Ident{}
+
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return idents
+	}
+
+	p.nextToken()
+
+	ident := &ast.Ident{Token: p.curToken, Value: p.curToken.Literal}
+	idents = append(idents, ident)
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		ident = &ast.Ident{Token: p.curToken, Value: p.curToken.Literal}
+		idents = append(idents, ident)
+	}
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return idents
+}
+
+// EXPR LPAREN Parameters RPAREN
+func (p *Parser) parseCallExpr(fn ast.Expr) ast.Expr {
+	ce := &ast.CallExpr{Token: p.curToken, Fn: fn}
+	ce.Args = p.parseCallArgs()
+	return ce
+}
+
+func (p *Parser) parseCallArgs() []ast.Expr {
+	args := []ast.Expr{}
+
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return args
+	}
+
+	p.nextToken()
+	args = append(args, p.parseExpr(LOWEST))
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		args = append(args, p.parseExpr(LOWEST))
+	}
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return args
+}
