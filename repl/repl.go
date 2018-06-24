@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/ei1chi/sample-lang/eval"
 	"github.com/ei1chi/sample-lang/lexer"
 	"github.com/ei1chi/sample-lang/parser"
 	"github.com/ei1chi/sample-lang/token"
@@ -33,6 +34,12 @@ func Start(in io.Reader, out io.Writer) {
 		if len(p.Errors()) != 0 {
 			printParseErrors(out, p.Errors())
 			continue
+		}
+
+		evaled := eval.Eval(program)
+		if evaled != nil {
+			io.WriteString(out, evaled.Inspect())
+			io.WriteString(out, "\n")
 		}
 
 		io.WriteString(out, program.String())
